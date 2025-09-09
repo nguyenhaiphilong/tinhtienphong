@@ -1,19 +1,23 @@
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
 import streamlit as st
 import pandas as pd
 import re
-from datetime import datetime
 import io
-import os
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+)
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 # ===== ĐĂNG KÝ FONT ARIAL =====
 pdfmetrics.registerFont(TTFont("Arial", "fonts/arial.ttf"))
 pdfmetrics.registerFont(TTFont("Arial-Bold", "fonts/arialbd.ttf"))
+# pdfmetrics.registerFont(TTFont("Arial", "C:/Windows/Fonts/arial.ttf"))
+# pdfmetrics.registerFont(TTFont("Arial-Bold", "C:/Windows/Fonts/arialbd.ttf"))
 
 # ===== FORMAT TIỀN =====
 def format_currency(value):
@@ -36,9 +40,9 @@ st.title("🏠 Quản lý tiền phòng trọ")
 
 # ===== GIÁ CỐ ĐỊNH =====
 st.sidebar.header("⚙️ Cài đặt giá")
-TIEN_PHONG_CO_DINH = st.sidebar.number_input("💵 Tiền phòng cố định", min_value=0, value=2100000, step=50000)
-GIA_DIEN = st.sidebar.number_input("⚡ Giá điện (1 kWh)", min_value=0, value=3000, step=100)
-GIA_NUOC = st.sidebar.number_input("🚰 Giá nước (1 m³)", min_value=0, value=15000, step=500)
+TIEN_PHONG_CO_DINH = st.sidebar.number_input("💵 Tiền phòng cố định", min_value=0, value=2100000, step=100000)
+GIA_DIEN = st.sidebar.number_input("⚡ Giá điện (1 kWh)", min_value=0, value=3500, step=500)
+GIA_NUOC = st.sidebar.number_input("🚰 Giá nước (1 m³)", min_value=0, value=20000, step=1000)
 TIEN_RAC = st.sidebar.number_input("🗑️ Tiền rác", min_value=0, value=10000, step=1000)
 
 # ===== NHẬP DỮ LIỆU =====
@@ -66,7 +70,7 @@ if st.button("💾 Lưu phòng"):
     else:
         record = {
             "Phòng": ten_phong,
-            "Đơn giá phòng": TIEN_PHONG_CO_DINH,
+            "Tiền phòng": TIEN_PHONG_CO_DINH,
             "Đơn giá điện": GIA_DIEN,
             "Số điện cũ": dien_cu,
             "Số điện mới": dien_moi_input,
@@ -77,7 +81,6 @@ if st.button("💾 Lưu phòng"):
             "Số nước mới": nuoc_moi_input,
             "Số nước sử dụng (m³)": so_nuoc,
             "Tiền nước": tien_nuoc,
-            "Tiền phòng": TIEN_PHONG_CO_DINH,
             "Tiền rác": TIEN_RAC,
             "Tổng tiền": tong
         }
@@ -101,52 +104,74 @@ if st.session_state["ds_phong"]:
     df = df.sort_values("__sort_key__").drop(columns="__sort_key__").reset_index(drop=True)
 
     df_display = df.copy()
-    for col in ["Đơn giá phòng", "Đơn giá điện", "Đơn giá nước",
-                "Tiền phòng", "Tiền điện", "Tiền nước", "Tiền rác", "Tổng tiền"]:
+    for col in ["Tiền phòng", "Đơn giá điện", "Đơn giá nước",
+                "Tiền điện", "Tiền nước", "Tiền rác", "Tổng tiền"]:
         df_display[col] = df_display[col].apply(format_currency)
 
     st.header("📊 Bảng tổng hợp tiền phòng")
+    df_display = df_display.set_index("Phòng")
     st.dataframe(df_display)
 
     tong_tien_all = df["Tổng tiền"].sum()
     st.subheader(f"💰 Tổng thu tất cả phòng: {format_currency(tong_tien_all)}")
 
     # ===== XUẤT PDF =====
-    if st.button("🧾 Xuất PDF Hóa đơn"):
+    if st.button("🧾 Xuất Hóa Đơn"):
+        thermal_width = 58 * mm
+        thermal_height = 100 * mm
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=(thermal_width, thermal_height),
+            leftMargin=5 * mm,
+            rightMargin=5 * mm,
+            topMargin=5 * mm,
+            bottomMargin=5 * mm
+        )
         elements = []
 
+        # Style setup
         styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name="Arial", fontName="Arial-Bold", fontSize=12))
-        styles.add(ParagraphStyle(name="ArialTitle", fontName="Arial", fontSize=16, alignment=1))
+        styles["Normal"].fontName = "Arial"
+        styles["Normal"].fontSize = 10
+        styles["Normal"].spaceAfter = 2
+        styles.add(ParagraphStyle(name="BillTitle", fontName="Arial-Bold", fontSize=12, alignment=1, spaceAfter=6))
+        styles.add(ParagraphStyle(name="TotalBold", fontName="Arial-Bold", fontSize=12, alignment=1, spaceAfter=6))
+        styles.add(ParagraphStyle(name="TotalNum", fontName="Arial-Bold", fontSize=16, alignment=1, spaceAfter=6))
 
-        for _, row in df.iterrows():
-            elements.append(Paragraph(f"TIỀN PHÒNG {row['Phòng']}", styles["ArialTitle"]))
-            elements.append(Spacer(1, 12))
 
-            data = [
-                ["Nội dung", "Số cũ", "Số mới", "Tiêu thụ", "Đơn giá", "Thành tiền"],
-                ["Tiền phòng", "-", "-", "-", format_currency(row["Đơn giá phòng"]), format_currency(row["Tiền phòng"])],
-                ["Điện (kWh)", row["Số điện cũ"], row["Số điện mới"], row["Số điện sử dụng (kWh)"], 
-                 format_currency(row["Đơn giá điện"]), format_currency(row["Tiền điện"])],
-                ["Nước (m³)", row["Số nước cũ"], row["Số nước mới"], row["Số nước sử dụng (m³)"], 
-                 format_currency(row["Đơn giá nước"]), format_currency(row["Tiền nước"])],
-                ["Rác", "-", "-", "-", "-", format_currency(row["Tiền rác"])],
-                ["TỔNG CỘNG", "", "", "", "", format_currency(row["Tổng tiền"])]
-            ]
+        for idx, row in df.iterrows():
+            # Tiêu đề
+            elements.append(Paragraph(f"<b>PHIẾU THU TIỀN PHÒNG {row['Phòng'].upper()}</b>", styles["BillTitle"]))
+            elements.append(Spacer(1, 6))
 
-            table = Table(data, colWidths=[90, 60, 60, 60, 80, 100])
-            table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("GRID", (0, 0), (-1, -1), 1, colors.black),
-                ("FONTNAME", (0, 0), (-1, -1), "Arial"),
-                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-            ]))
-            elements.append(table)
-            elements.append(Spacer(1, 24))
+            # Nội dung từng dòng
+            elements.append(Paragraph(f"Tiền phòng: {format_currency(row['Tiền phòng'])}đ", styles["Normal"]))
+            elements.append(Spacer(1, 6))
+
+            elements.append(Paragraph(f"Điện cũ: {row['Số điện cũ']}", styles["Normal"]))
+            elements.append(Paragraph(f"Điện mới: {row['Số điện mới']}", styles["Normal"]))
+            elements.append(Paragraph(f"Tiêu thụ: {row['Số điện sử dụng (kWh)']} kWh", styles["Normal"]))
+            elements.append(Paragraph(f"Tiền điện: {format_currency(row['Tiền điện'])}đ", styles["Normal"]))
+            elements.append(Spacer(1, 6))
+
+            elements.append(Paragraph(f"Nước cũ: {row['Số nước cũ']}", styles["Normal"]))
+            elements.append(Paragraph(f"Nước mới: {row['Số nước mới']}", styles["Normal"]))
+            elements.append(Paragraph(f"Tiêu thụ: {row['Số nước sử dụng (m³)']} m³", styles["Normal"]))
+            elements.append(Paragraph(f"Tiền nước: {format_currency(row['Tiền nước'])}đ", styles["Normal"]))
+            elements.append(Spacer(1, 6))
+
+            elements.append(Paragraph(f"Tiền rác: {format_currency(row['Tiền rác'])}đ", styles["Normal"]))
+            elements.append(Spacer(1, 6))
+
+            # elements.append(Paragraph(f"<b>TỔNG CỘNG: {format_currency(row['Tổng tiền'])}</b> đ", styles["Normal"]))
+            elements.append(Paragraph(f"<b>TỔNG CỘNG:</b>", styles["TotalBold"]))
+            elements.append(Paragraph(f"{format_currency(row['Tổng tiền'])}đ", styles["TotalNum"]))
+            elements.append(Spacer(1, 6))
+
+            # Trang mới cho mỗi phòng
+            if idx < len(df) - 1:
+                elements.append(PageBreak())
 
         doc.build(elements)
         buffer.seek(0)
@@ -154,6 +179,6 @@ if st.session_state["ds_phong"]:
         st.download_button(
             label="⬇️ Tải file PDF",
             data=buffer,
-            file_name=f"hoa_don_phong_{datetime.now().strftime('%m-%Y')}.pdf",
+            file_name=f"phieu_thu_tien_nha_tro_{datetime.now().strftime('%m-%Y')}.pdf",
             mime="application/pdf"
         )
