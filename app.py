@@ -296,7 +296,7 @@ if st.session_state["ds_phong"]:
         st.download_button(
             "⬇️ Tải PDF Danh sách",
             pdf_buffer1,
-            f"Bang_tong_tien_{datetime.now().strftime('%m-%Y')}.pdf",
+            f"Bang_tong_tien_thang_{datetime.now().strftime('%m-%Y')}.pdf",
             "application/pdf"
         )
         
@@ -332,6 +332,6 @@ if st.button("📥 Xuất Excel quản lí"):
         st.download_button(
             "⬇️ Tải Excel",
             excel_buffer,
-            f"Quan_li_phong_{datetime.now().strftime('%m-%Y')}.xlsx",
+            f"Quan_li_phong_tro_thang_{datetime.now().strftime('%m-%Y')}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
