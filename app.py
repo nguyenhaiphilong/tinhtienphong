@@ -307,7 +307,7 @@ if st.button("📥 Xuất Excel quản lí"):
         st.warning("⚠️ Chưa có dữ liệu phòng, không thể xuất Excel!")
     else:
         excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
             # ---- Sheet 1: Điện nước ----
             df_sheet1 = pd.DataFrame({
                 "Phòng": df_sorted["Phòng"],
