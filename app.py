@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import re
 import io
-import xlsxwriter
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
